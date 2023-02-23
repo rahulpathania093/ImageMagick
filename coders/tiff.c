@@ -1706,9 +1706,9 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
             (void) SetPixelMetaChannels(image,extra_samples,exception);
             for (i=0; i < extra_samples; i++)
             {
-              image->alpha_trait=BlendPixelTrait;
               if (sample_info[i] == EXTRASAMPLE_ASSOCALPHA)
                 {
+                  image->alpha_trait=BlendPixelTrait;
                   SetQuantumAlphaType(quantum_info,AssociatedQuantumAlpha);
                   (void) SetImageProperty(image,"tiff:alpha","associated",
                     exception);
@@ -1716,6 +1716,7 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,
               else
                 if (sample_info[i] == EXTRASAMPLE_UNASSALPHA)
                   {
+                    image->alpha_trait=BlendPixelTrait;
                     SetQuantumAlphaType(quantum_info,DisassociatedQuantumAlpha);
                     (void) SetImageProperty(image,"tiff:alpha","unassociated",
                       exception);
@@ -3314,6 +3315,7 @@ static MagickBooleanType WriteTIFFImage(const ImageInfo *image_info,
     quantum_type;
 
   size_t
+    extra_samples,
     length,
     number_scenes;
 
@@ -3607,10 +3609,11 @@ static MagickBooleanType WriteTIFFImage(const ImageInfo *image_info,
     (void) TIFFSetField(tiff,TIFFTAG_COMPRESSION,compress_tag);
     (void) TIFFSetField(tiff,TIFFTAG_FILLORDER,endian);
     (void) TIFFSetField(tiff,TIFFTAG_BITSPERSAMPLE,quantum_info->depth);
-    if (image->alpha_trait != UndefinedPixelTrait)
+    extra_samples=image->alpha_trait != UndefinedPixelTrait ? 1 : 0;
+    extra_samples+=image->number_meta_channels;
+    if (extra_samples != 0)
       {
         uint16
-          extra_samples,
           sample_info[MaxPixelChannels+1],
           samples_per_pixel;
 
@@ -3618,8 +3621,9 @@ static MagickBooleanType WriteTIFFImage(const ImageInfo *image_info,
           TIFF has a matte channel.
         */
         (void) memset(sample_info,0,sizeof(sample_info));
-        extra_samples=(uint16) (image->number_meta_channels+1);
-        sample_info[0]=EXTRASAMPLE_UNASSALPHA;
+        sample_info[0]=EXTRASAMPLE_UNSPECIFIED;
+        if (image->alpha_trait != UndefinedPixelTrait)
+          sample_info[0]=EXTRASAMPLE_UNASSALPHA;
         option=GetImageOption(image_info,"tiff:alpha");
         if (option != (const char *) NULL)
           {
@@ -3633,7 +3637,7 @@ static MagickBooleanType WriteTIFFImage(const ImageInfo *image_info,
           &samples_per_pixel,sans);
         (void) TIFFSetField(tiff,TIFFTAG_SAMPLESPERPIXEL,samples_per_pixel+
           extra_samples);
-        (void) TIFFSetField(tiff,TIFFTAG_EXTRASAMPLES,extra_samples,
+        (void) TIFFSetField(tiff,TIFFTAG_EXTRASAMPLES,(uint16) extra_samples,
           &sample_info);
         if (sample_info[0] == EXTRASAMPLE_ASSOCALPHA)
           SetQuantumAlphaType(quantum_info,AssociatedQuantumAlpha);
